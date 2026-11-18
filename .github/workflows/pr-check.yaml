@@ -1,0 +1,79 @@
+#
+# Copyright (C) 2026 Red Hat, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Validate: frontmatter, discovery and install'
+
+on:
+  pull_request:
+
+env:
+  DISABLE_TELEMETRY: 1  # CI runs must not count as installs on skills.sh
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  skills:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Installs pnpm (from packageManager in package.json) and node (from .nvmrc)
+      - name: Install pnpm, node and dependencies
+        uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
+        with:
+          cache: true
+          require-lockfile: true  # runs `pnpm install --frozen-lockfile`
+
+      - name: Test the frontmatter parser
+        run: pnpm test
+
+      - name: Lint SKILL.md files
+        run: pnpm run lint:skills
+
+      - name: Discovery and install smoke test
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/fakehome"
+          mkdir -p "$HOME"
+
+          # the CLI is a devDependency, so the version is pinned in the lockfile
+          # and dependabot can bump it
+          pnpm exec skills add ./ --skill '*' \
+            -a claude-code -a codex -g -y --json > "$RUNNER_TEMP/install.json"
+          cat "$RUNNER_TEMP/install.json"
+
+          # discovery: the CLI found exactly the directories under skills/
+          ls -1 skills | sort > "$RUNNER_TEMP/expected.txt"
+          jq -r '.[].name' "$RUNNER_TEMP/install.json" | sort > "$RUNNER_TEMP/found.txt"
+          echo '== discovery check =='
+          diff -u "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/found.txt"
+
+          # install: every skill reported installed and present for both agents
+          echo '== install check =='
+          jq -e 'length > 0 and all(.[]; .status == "installed")' \
+            "$RUNNER_TEMP/install.json" > /dev/null
+          while read -r name; do
+            test -f "$HOME/.claude/skills/$name/SKILL.md"
+            test -f "$HOME/.agents/skills/$name/SKILL.md"
+          done < "$RUNNER_TEMP/expected.txt"
