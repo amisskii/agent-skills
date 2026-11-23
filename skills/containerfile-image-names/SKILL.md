@@ -3,13 +3,16 @@ name: containerfile-image-names
 description: Review Containerfile or Dockerfile FROM instructions for image names without an explicit registry. Use when asked to check base-image names or short-name resolution in a container build file.
 license: Apache-2.0
 metadata:
-  version: "0.1.1"
+  version: "0.1.2"
 ---
 
 # Review Containerfile image names
 
 Read the requested Containerfile or Dockerfile without changing it or running a
 build. For each FROM instruction, identify its image operand after any flags.
+Recognize instruction keywords regardless of case. Join continued instruction
+lines using the file's escape character (backslash by default), and report the
+line where the instruction starts.
 
 - Treat scratch as the empty base, not a registry image.
 - Track AS stage names. A later FROM referring to an earlier stage is not an
