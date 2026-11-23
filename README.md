@@ -1,6 +1,6 @@
 # Podman Desktop agent skills
 
-[Agent Skills](https://agentskills.io/specification) are reusable instructions and
+Agent Skills are reusable instructions and
 resources that help coding agents work with the Podman ecosystem. Install skills
 from this repository with the [skills CLI](https://github.com/vercel-labs/skills)
 or [GitHub CLI](https://cli.github.com/manual/gh_skill_install).
